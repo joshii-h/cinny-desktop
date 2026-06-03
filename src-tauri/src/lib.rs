@@ -4,6 +4,10 @@
 )]
 
 // mod menu;
+#[cfg(not(target_os = "linux"))]
+mod tray;
+#[cfg(target_os = "linux")]
+mod tray_linux;
 
 use tauri::{webview::{NewWindowResponse, WebviewWindowBuilder}, WebviewUrl, TitleBarStyle};
 use tauri_plugin_opener::OpenerExt;
@@ -107,7 +111,22 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             let window_builder = window_builder.title_bar_style(TitleBarStyle::Transparent);
             
-            window_builder.build()?;
+            let window = window_builder.build()?;
+
+            // Close to tray: hide the window instead of quitting the app.
+            let win = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = win.hide();
+                }
+            });
+
+            #[cfg(not(target_os = "linux"))]
+            tray::build(app.handle())?;
+            #[cfg(target_os = "linux")]
+            tray_linux::build(app.handle().clone());
+
             Ok(())
         })
         .run(context)
