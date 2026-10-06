@@ -9,7 +9,7 @@ mod tray;
 #[cfg(target_os = "linux")]
 mod tray_linux;
 
-use tauri::{webview::{NewWindowResponse, WebviewWindowBuilder}, WebviewUrl, TitleBarStyle};
+use tauri::{webview::{NewWindowResponse, WebviewWindowBuilder}, Manager, WebviewUrl, TitleBarStyle};
 use tauri_plugin_opener::OpenerExt;
 
 #[cfg(feature = "updater")]
@@ -33,15 +33,26 @@ pub fn run() {
 
     let port: u16 = 44548;
     let context = tauri::generate_context!();
-    #[cfg(feature = "updater")]
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
-    #[cfg(not(feature = "updater"))]
-    let builder = tauri::Builder::default();
 
     // #[cfg(target_os = "macos")]
     // {
     //     builder = builder.menu(menu::menu());
     // }
+
+    // Must be registered first: a second launch focuses the running instance
+    // (which may be hidden in the tray) instead of opening another window.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }));
+    }
 
     #[cfg(feature = "updater")]
     {
