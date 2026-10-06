@@ -59,3 +59,16 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     builder.build(app)?;
     Ok(())
 }
+
+/// Swap the tray icon for a variant with an unread dot, or back.
+pub fn set_unread<R: Runtime>(app: &AppHandle<R>, unread: bool) {
+    let (Some(tray), Some(icon)) = (app.tray_by_id("main-tray"), app.default_window_icon()) else {
+        return;
+    };
+    let icon = if unread {
+        crate::badge::with_dot(icon)
+    } else {
+        icon.clone().to_owned()
+    };
+    let _ = tray.set_icon(Some(icon));
+}

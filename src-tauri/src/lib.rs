@@ -4,6 +4,7 @@
 )]
 
 // mod menu;
+mod badge;
 #[cfg(not(target_os = "linux"))]
 mod tray;
 #[cfg(target_os = "linux")]
@@ -64,6 +65,7 @@ pub fn run() {
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![badge::set_unread])
         .setup(move |app| {
             #[cfg(feature = "updater")]
             {
@@ -113,6 +115,7 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Cinny")
+                .initialization_script(badge::INIT_SCRIPT)
                 .disable_drag_drop_handler()
                 .on_new_window(move |url, _features| {
                     let _ = app_handle.opener().open_url(url.as_str(), None::<&str>);

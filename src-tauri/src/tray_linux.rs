@@ -8,7 +8,7 @@
 
 use ksni::{
     menu::{MenuItem, StandardItem},
-    Tray, TrayService,
+    Handle, Icon, Tray, TrayService,
 };
 use tauri::{AppHandle, Manager};
 
@@ -27,6 +27,10 @@ fn toggle_window(app: &AppHandle) {
 
 struct CinnyTray {
     app: AppHandle,
+    /// Icon with the unread dot (ARGB32), shown instead of the themed icon
+    /// while there are unread messages.
+    unread_icon: Option<Icon>,
+    unread: bool,
 }
 
 impl Tray for CinnyTray {
@@ -39,8 +43,20 @@ impl Tray for CinnyTray {
     }
 
     // Resolved from the installed hicolor theme (/usr/share/icons/.../cinny.png).
+    // Hosts prefer icon_name over icon_pixmap, so it is cleared while unread.
     fn icon_name(&self) -> String {
-        "cinny".into()
+        if self.unread && self.unread_icon.is_some() {
+            String::new()
+        } else {
+            "cinny".into()
+        }
+    }
+
+    fn icon_pixmap(&self) -> Vec<Icon> {
+        match (&self.unread_icon, self.unread) {
+            (Some(icon), true) => vec![icon.clone()],
+            _ => vec![],
+        }
     }
 
     // Left click.
@@ -69,6 +85,31 @@ impl Tray for CinnyTray {
 
 /// Spawn the native SNI tray on its own thread.
 pub fn build(app: AppHandle) {
-    let service = TrayService::new(CinnyTray { app });
+    let unread_icon = app.default_window_icon().map(|icon| {
+        let icon = crate::badge::with_dot(icon);
+        // RGBA -> ARGB
+        let mut data = icon.rgba().to_vec();
+        for px in data.chunks_exact_mut(4) {
+            px.rotate_right(1);
+        }
+        Icon {
+            width: icon.width() as i32,
+            height: icon.height() as i32,
+            data,
+        }
+    });
+    let service = TrayService::new(CinnyTray {
+        app: app.clone(),
+        unread_icon,
+        unread: false,
+    });
+    app.manage(service.handle());
     service.spawn();
+}
+
+/// Show or hide the unread dot on the tray icon.
+pub fn set_unread(app: &AppHandle, unread: bool) {
+    if let Some(handle) = app.try_state::<Handle<CinnyTray>>() {
+        handle.update(|tray| tray.unread = unread);
+    }
 }
